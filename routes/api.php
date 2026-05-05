@@ -2,6 +2,8 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\AlertController;
+use App\Http\Controllers\WazuhController;
 
 /*
 |--------------------------------------------------------------------------
@@ -14,6 +16,9 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
-    return $request->user();
+Route::prefix('wazuh')->group(function () {
+    Route::get('/agents', [WazuhController::class, 'agents']);
+    Route::get('/rules', [WazuhController::class, 'rules']);
+    Route::get('/manager', [WazuhController::class, 'manager']);
+    Route::get('/alerts', [WazuhController::class, 'alerts']);
 });
