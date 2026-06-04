@@ -22,13 +22,55 @@ class WazuhController extends Controller
     public function agents(Request $request)
     {
         $page = (int) $request->query('page', 1);
-        $size = (int) $request->query('size', 20);
+        $size = (int) $request->query('size', 100);
         $search = $request->query('search', '');
         $status = $request->query('status', '');
 
-        return response()->json(
-            $this->wazuhApiService->getAgents($page, $size, $search, $status)
+        $agentsResponse = $this->wazuhApiService->getAgents(
+            $page,
+            $size,
+            $search,
+            $status
         );
+
+        if (!$agentsResponse['success']) {
+            return response()->json($agentsResponse);
+        }
+
+        $agents = $agentsResponse['data']['affected_items'] ?? [];
+
+        $agentIds = collect($agents)
+            ->pluck('id')
+            ->filter()
+            ->values()
+            ->toArray();
+
+        $insightMap = $this->wazuhIndexerService->getAgentInsightMap($agentIds);
+
+        $agents = collect($agents)->map(function ($agent) use ($insightMap) {
+            $id = $agent['id'] ?? null;
+
+            $insight = $insightMap[$id] ?? [
+                'alerts_24h' => 0,
+                'high_alerts_24h' => 0,
+                'latest_alert_at' => null,
+                'latest_log_at' => null,
+                'latest_data_at' => null,
+                'risk_level' => 'Low',
+            ];
+
+            if (($agent['status'] ?? '') !== 'active') {
+                $insight['risk_level'] = 'High';
+            }
+
+            $agent['insights'] = $insight;
+
+            return $agent;
+        })->values();
+
+        $agentsResponse['data']['affected_items'] = $agents;
+
+        return response()->json($agentsResponse);
     }
 
     public function rules(Request $request)
@@ -65,8 +107,77 @@ class WazuhController extends Controller
 
     public function manager()
     {
+        $manager = $this->wazuhApiService->getManagerInfo();
+        $indexer = $this->wazuhIndexerService->getHealthSummary();
+        $agents = $this->wazuhApiService->getAgentsHealthSummary();
+
+        if (!($manager['success'] ?? false)) {
+            return response()->json([
+                'success' => false,
+                'error' => $manager['error'] ?? 'Failed to load manager information'
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'status' => $manager['data']['status'] ?? [],
+                'info' => $manager['data']['info'] ?? [],
+
+                'health' => [
+                    'manager_api' => 'online',
+                    'indexer' => $indexer['health']['indexer'] ?? 'error',
+                    'alerts_pipeline' => $indexer['health']['alerts_pipeline'] ?? 'idle',
+                    'logs_pipeline' => $indexer['health']['logs_pipeline'] ?? 'idle',
+                ],
+
+                'metrics' => array_merge(
+                    $indexer['metrics'] ?? [],
+                    $agents
+                ),
+
+                'latest' => $indexer['latest'] ?? [],
+
+                'indices' => $indexer['indices'] ?? [],
+            ]
+        ]);
+    }
+
+
+
+    public function logs(Request $request)
+    {
+        $page = (int) $request->query('page', 1);
+        $size = (int) $request->query('size', 20);
+        $search = $request->query('search', '');
+        $agentId = $request->query('agent_id', '');
+        $location = $request->query('location', '');
+        $decoder = $request->query('decoder', '');
+        $program = $request->query('program', '');
+        $timeRange = $request->query('time_range', '24h');
+        $dateFrom = $request->query('date_from', '');
+        $dateTo = $request->query('date_to', '');
+
         return response()->json(
-            $this->wazuhApiService->getManagerInfo()
+            $this->wazuhIndexerService->getLogs(
+                $page,
+                $size,
+                $search,
+                $agentId,
+                $location,
+                $decoder,
+                $program,
+                $timeRange,
+                $dateFrom,
+                $dateTo
+            )
+        );
+    }
+
+    public function logFilters()
+    {
+        return response()->json(
+            $this->wazuhIndexerService->getLogFilters()
         );
     }
 }

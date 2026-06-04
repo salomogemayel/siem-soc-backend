@@ -56,9 +56,17 @@ class WazuhApiService
                 'sort' => '+id',
             ];
 
-            if ($search) $query['search'] = $search;
-            if ($level) $query['level'] = '>=' . $level;
-            if ($group) $query['group'] = $group;
+            if ($search) {
+                $query['search'] = $search;
+            }
+
+            if ($level) {
+                $query['level'] = (int)$level . '-16';
+            }
+
+            if ($group) {
+                $query['group'] = $group;
+            }
 
             $response = $this->request('get', '/rules', $query);
 
@@ -153,5 +161,44 @@ class WazuhApiService
                 'error' => $e->getMessage(),
             ];
         }
+    }
+
+    public function getAgentsHealthSummary()
+    {
+        try {
+            return [
+                'total_agents' => $this->getAgentCount(),
+                'active_agents' => $this->getAgentCount('active'),
+                'disconnected_agents' => $this->getAgentCount('disconnected'),
+                'never_connected_agents' => $this->getAgentCount('never_connected'),
+            ];
+
+        } catch (\Exception $e) {
+            return [
+                'total_agents' => 0,
+                'active_agents' => 0,
+                'disconnected_agents' => 0,
+                'never_connected_agents' => 0,
+            ];
+        }
+    }
+
+    private function getAgentCount($status = null)
+    {
+        $query = [
+            'limit' => 1,
+        ];
+
+        if ($status) {
+            $query['status'] = $status;
+        }
+
+        $response = $this->request('get', '/agents', $query);
+
+        if (!$response->successful()) {
+            return 0;
+        }
+
+        return $response->json()['data']['total_affected_items'] ?? 0;
     }
 }
