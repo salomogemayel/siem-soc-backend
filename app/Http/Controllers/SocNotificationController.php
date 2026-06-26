@@ -1,10 +1,9 @@
 <?php
 
-namespace App\Http\Controllers\Api;
+namespace App\Http\Controllers;
 
-use App\Models\UnusualIpAlert;
-use App\Http\Controllers\Controller;
 use App\Models\SocNotification;
+use App\Models\UnusualIpAlert;
 use App\Services\WazuhIndexerService;
 use Illuminate\Http\Request;
 
@@ -19,34 +18,45 @@ class SocNotificationController extends Controller
 
     private function syncCriticalAlerts(Request $request): void
     {
-        $result = $this->wazuhIndexerService->getCriticalAlertsForNotifications(10, 30);
+        $user = $request->user();
 
-        if (!$result['success']) {
+        if (!$user) {
             return;
         }
 
-        foreach ($result['data'] as $alert) {
-            $level = (int) $alert['rule_level'];
+        $result = $this->wazuhIndexerService->getCriticalAlertsForNotifications(10, 30);
 
+        if (!($result['success'] ?? false)) {
+            return;
+        }
+
+        foreach (($result['data'] ?? []) as $alert) {
+            $sourceAlertId = data_get($alert, 'source_alert_id', data_get($alert, 'id'));
+
+            if (!$sourceAlertId) {
+                continue;
+            }
+
+            $level = (int) data_get($alert, 'rule_level', data_get($alert, 'level', 0));
             $severity = $level >= 12 ? 'critical' : 'high';
 
             SocNotification::updateOrCreate(
                 [
-                    'user_id' => $request->user()->id,
-                    'source_alert_id' => $alert['source_alert_id'],
+                    'user_id' => $user->id,
+                    'source_alert_id' => $sourceAlertId,
                 ],
                 [
                     'type' => 'critical_alert',
                     'title' => $severity === 'critical'
                         ? 'Critical Alert Detected'
                         : 'High Severity Alert Detected',
-                    'message' => $alert['description'],
+                    'message' => data_get($alert, 'description', 'Security alert detected'),
                     'severity' => $severity,
-                    'rule_id' => $alert['rule_id'],
+                    'rule_id' => data_get($alert, 'rule_id'),
                     'rule_level' => $level,
-                    'agent_id' => $alert['agent_id'],
-                    'agent_name' => $alert['agent_name'],
-                    'alert_timestamp' => $alert['timestamp'],
+                    'agent_id' => data_get($alert, 'agent_id'),
+                    'agent_name' => data_get($alert, 'agent_name'),
+                    'alert_timestamp' => data_get($alert, 'timestamp', now()),
                     'metadata' => $alert,
                 ]
             );
@@ -60,7 +70,7 @@ class SocNotificationController extends Controller
         foreach ($unusualIpAlerts as $alert) {
             SocNotification::updateOrCreate(
                 [
-                    'user_id' => $request->user()->id,
+                    'user_id' => $user->id,
                     'source_alert_id' => 'soc-unusual-ip-' . $alert->id,
                 ],
                 [
@@ -72,7 +82,7 @@ class SocNotificationController extends Controller
                     'rule_level' => 10,
                     'agent_id' => 'SOC',
                     'agent_name' => 'SOC Analysis',
-                    'alert_timestamp' => $alert->detected_at,
+                    'alert_timestamp' => $alert->detected_at ?? now(),
                     'metadata' => [
                         'soc_alert_id' => $alert->id,
                         'cis_user_id' => $alert->cis_user_id,

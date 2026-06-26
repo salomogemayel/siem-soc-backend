@@ -11,11 +11,7 @@ return new class extends Migration
         Schema::create('soc_notifications', function (Blueprint $table) {
             $table->id();
 
-            $table->foreignId('user_id')
-                ->constrained()
-                ->cascadeOnDelete();
-
-            $table->string('source_alert_id');
+            $table->string('source_alert_id')->unique();
             $table->string('type')->default('critical_alert');
 
             $table->string('title');
@@ -28,7 +24,7 @@ return new class extends Migration
             $table->string('agent_id')->nullable();
             $table->string('agent_name')->nullable();
 
-            $table->string('alert_timestamp')->nullable();
+            $table->timestamp('alert_timestamp')->nullable();
 
             $table->boolean('is_read')->default(false);
             $table->timestamp('read_at')->nullable();
@@ -37,7 +33,9 @@ return new class extends Migration
 
             $table->timestamps();
 
-            $table->unique(['user_id', 'source_alert_id']);
+            $table->index(['is_read', 'created_at']);
+            $table->index(['severity', 'created_at']);
+            $table->index(['rule_id', 'created_at']);
         });
     }
 

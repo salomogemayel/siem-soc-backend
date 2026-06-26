@@ -2,9 +2,13 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
+use App\Http\Requests\GetWazuhAlertsRequest;
+use App\Http\Requests\GetWazuhLogsRequest;
+use App\Http\Resources\WazuhAlertResource;
+use App\Http\Resources\WazuhLogResource;
 use App\Services\WazuhApiService;
 use App\Services\WazuhIndexerService;
+use Illuminate\Http\Request;
 
 class WazuhController extends Controller
 {
@@ -92,17 +96,46 @@ class WazuhController extends Controller
         return response()->json($rules);
     }
 
-    public function alerts(Request $request)
+    public function alerts(GetWazuhAlertsRequest $request)
     {
-        $page = $request->query('page', 1);
-        $size = $request->query('size', 20);
-        $level = $request->query('level');
-        $search = $request->query('search');
-        $agent = $request->query('agent');
+        $filters = $request->filters();
 
-        return response()->json(
-            $this->wazuhIndexerService->getAlerts($page, $size, $level, $search, $agent)
+        $result = $this->wazuhIndexerService->getAlerts(
+            $filters['page'],
+            $filters['size'],
+            $filters['level'],
+            $filters['search'],
+            $filters['agentId'],
+            $filters['timeRange'],
+            $filters['dateFrom'],
+            $filters['dateTo'],
+            $filters['ruleId'],
+            $filters['mitre'],
+            $filters['group'],
+            $filters['sortBy'],
+            $filters['sortOrder'],
+            $filters['includeSoc'],
+            $filters['alertView']
         );
+
+        if (!($result['success'] ?? false)) {
+            return response()->json($result, 500);
+        }
+
+        $result['data'] = WazuhAlertResource::collection($result['data'])->resolve();
+
+        return response()->json($result);
+    }
+
+    public function alertDetail(string $id)
+    {
+        $result = $this->wazuhIndexerService->getAlertById($id);
+
+        if (!($result['success'] ?? false)) {
+            return response()->json($result, 404);
+        }
+
+        return response()->json($result);
     }
 
     public function manager()
@@ -143,35 +176,31 @@ class WazuhController extends Controller
         ]);
     }
 
-
-
-    public function logs(Request $request)
+    public function logs(GetWazuhLogsRequest $request)
     {
-        $page = (int) $request->query('page', 1);
-        $size = (int) $request->query('size', 20);
-        $search = $request->query('search', '');
-        $agentId = $request->query('agent_id', '');
-        $location = $request->query('location', '');
-        $decoder = $request->query('decoder', '');
-        $program = $request->query('program', '');
-        $timeRange = $request->query('time_range', '24h');
-        $dateFrom = $request->query('date_from', '');
-        $dateTo = $request->query('date_to', '');
+        $filters = $request->filters();
 
-        return response()->json(
-            $this->wazuhIndexerService->getLogs(
-                $page,
-                $size,
-                $search,
-                $agentId,
-                $location,
-                $decoder,
-                $program,
-                $timeRange,
-                $dateFrom,
-                $dateTo
-            )
+        $result = $this->wazuhIndexerService->getLogs(
+            $filters['page'],
+            $filters['size'],
+            $filters['search'],
+            $filters['agentId'],
+            $filters['location'],
+            $filters['decoder'],
+            $filters['program'],
+            $filters['timeRange'],
+            $filters['dateFrom'],
+            $filters['dateTo'],
+            $filters['logType']
         );
+
+        if (!($result['success'] ?? false)) {
+            return response()->json($result, 500);
+        }
+
+        $result['data'] = WazuhLogResource::collection($result['data'])->resolve();
+
+        return response()->json($result);
     }
 
     public function logFilters()
