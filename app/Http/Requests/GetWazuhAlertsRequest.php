@@ -21,6 +21,7 @@ class GetWazuhAlertsRequest extends FormRequest
             'agent_id' => $this->input('agent_id', $this->input('agentId', $this->input('agent'))),
             'sort_by' => $this->input('sort_by', $this->input('sortBy', 'timestamp')),
             'sort_order' => $this->input('sort_order', $this->input('sortOrder', 'desc')),
+            'level_gte' => $this->input('level_gte', $this->input('levelGte')),
             'include_soc' => $this->boolean('include_soc') || $this->boolean('includeSoc'),
         ]);
     }
@@ -54,7 +55,9 @@ class GetWazuhAlertsRequest extends FormRequest
             'page' => (int) $this->query('page', 1),
             'size' => (int) $this->query('size', 20),
             'level' => $this->query('level', ''),
-            'levelGte' => $this->query('level_gte', ''),
+            'levelGte' => $this->query('level_gte') !== null && $this->query('level_gte') !== ''
+                ? (int) $this->query('level_gte')
+                : null,
             'severity' => $this->query('severity', ''),
             'search' => $this->query('search', ''),
             'agentId' => $this->query('agent_id', ''),

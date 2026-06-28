@@ -34,34 +34,48 @@ class WazuhIndexerService
         $sortBy = 'timestamp',
         $sortOrder = 'desc',
         $includeSoc = false,
-        $alertView = 'incident'
+        $alertView = 'incident',
+        $severity = null,
+        $levelGte = null
     ) {
         try {
             $page = max((int) $page, 1);
             $size = max((int) $size, 1);
 
+            $level = $level !== '' ? $level : null;
+            $search = $search !== '' ? $search : null;
+            $agent = $agent !== '' ? $agent : null;
+            $ruleId = $ruleId !== '' ? $ruleId : null;
+            $mitre = $mitre !== '' ? $mitre : null;
+            $group = $group !== '' ? $group : null;
+            $severity = $severity !== '' ? $severity : null;
+            $levelGte = $levelGte !== '' && $levelGte !== null ? (int) $levelGte : null;
+
             $queryPage = $alertView === 'raw' ? $page : 1;
             $querySize = $alertView === 'raw' ? $size : 1000;
-
             $queryRuleId = $alertView === 'raw' ? $ruleId : null;
+
+            $payload = $this->alertQueryBuilder->buildSearchPayload(
+                $queryPage,
+                $querySize,
+                $level,
+                $search,
+                $agent,
+                $timeRange,
+                $dateFrom,
+                $dateTo,
+                $queryRuleId,
+                $mitre,
+                $group,
+                $sortBy,
+                $sortOrder,
+                $severity,
+                $levelGte
+            );
 
             $response = $this->indexerClient->post(
                 '/' . config('wazuh.indexes.alerts') . '/_search',
-                $this->alertQueryBuilder->buildSearchPayload(
-                    $queryPage,
-                    $querySize,
-                    $level,
-                    $search,
-                    $agent,
-                    $timeRange,
-                    $dateFrom,
-                    $dateTo,
-                    $queryRuleId,
-                    $mitre,
-                    $group,
-                    $sortBy,
-                    $sortOrder
-                )
+                $payload
             );
 
             if (!$response->successful()) {
@@ -72,22 +86,20 @@ class WazuhIndexerService
             }
 
             $json = $response->json();
-
             $hits = $json['hits']['hits'] ?? [];
             $rawTotal = data_get($json, 'hits.total.value', 0);
 
             $alerts = $this->alertMapper->mapMany($hits);
-
             $summary = $this->buildAlertSummaryFromAggregations($json, $rawTotal);
 
-            $aggs = $json['aggregations'] ?? [];
-            $topMitreBuckets = data_get($aggs, 'top_mitre_tactics.buckets', []);
-            $topMitreStats = collect($topMitreBuckets)->map(function ($bucket) {
-                return [
+            $topMitreBuckets = data_get($json, 'aggregations.top_mitre_tactics.buckets', []);
+
+            $topMitreStats = collect($topMitreBuckets)
+                ->map(fn ($bucket) => [
                     'name' => $bucket['key'],
-                    'count' => $bucket['doc_count']
-                ];
-            })->toArray();
+                    'count' => $bucket['doc_count'],
+                ])
+                ->toArray();
 
             $socAlerts = collect();
 
@@ -107,6 +119,16 @@ class WazuhIndexerService
                     $mitre,
                     $group
                 );
+
+                if ($severity) {
+                    $socAlerts = $this->filterSocAlertsBySeverity($socAlerts, $severity);
+                }
+
+                if ($levelGte !== null) {
+                    $socAlerts = $socAlerts
+                        ->filter(fn ($alert) => (int) data_get($alert, 'level', 0) >= $levelGte)
+                        ->values();
+                }
 
                 $summary = $this->mergeSocAlertSummary($summary, $socAlerts);
             }
@@ -131,9 +153,7 @@ class WazuhIndexerService
 
             $pagedAlerts = $alertView === 'raw'
                 ? $correlatedAlerts
-                : $correlatedAlerts
-                    ->forPage($page, $size)
-                    ->values();
+                : $correlatedAlerts->forPage($page, $size)->values();
 
             return [
                 'success' => true,
@@ -142,14 +162,13 @@ class WazuhIndexerService
                 'raw_total' => $includeSoc ? $rawTotal + $socAlerts->count() : $rawTotal,
                 'summary' => $summary,
                 'statistics' => [
-                    'top_mitre' => $topMitreStats
+                    'top_mitre' => $topMitreStats,
                 ],
                 'page' => $page,
                 'size' => $size,
                 'total_pages' => (int) ceil(max($total, 1) / $size),
                 'alert_view' => $alertView,
             ];
-
         } catch (\Exception $e) {
             return [
                 'success' => false,
@@ -167,16 +186,16 @@ class WazuhIndexerService
                     'size' => 1,
                     'query' => [
                         'ids' => [
-                            'values' => [$id]
-                        ]
-                    ]
+                            'values' => [$id],
+                        ],
+                    ],
                 ]
             );
 
             if (!$response->successful()) {
                 return [
                     'success' => false,
-                    'error' => $response->body()
+                    'error' => $response->body(),
                 ];
             }
 
@@ -186,7 +205,7 @@ class WazuhIndexerService
             if (!$hit) {
                 return [
                     'success' => false,
-                    'error' => 'Alert not found'
+                    'error' => 'Alert not found',
                 ];
             }
 
@@ -210,7 +229,7 @@ class WazuhIndexerService
         } catch (\Throwable $e) {
             return [
                 'success' => false,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ];
         }
     }
@@ -231,27 +250,31 @@ class WazuhIndexerService
         $timeRange = '24h',
         $dateFrom = '',
         $dateTo = '',
-        $logType = ''
+        $logType = '',
+        $logScope = 'cis'
     ) {
         try {
             $page = max((int) $page, 1);
             $size = max((int) $size, 1);
 
+            $payload = $this->logQueryBuilder->buildSearchPayload(
+                $page,
+                $size,
+                $search,
+                $agentId,
+                $location,
+                $decoder,
+                $program,
+                $timeRange,
+                $dateFrom,
+                $dateTo,
+                $logType,
+                $logScope
+            );
+
             $response = $this->indexerClient->post(
                 '/' . config('wazuh.indexes.archives') . '/_search',
-                $this->logQueryBuilder->buildSearchPayload(
-                    $page,
-                    $size,
-                    $search,
-                    $agentId,
-                    $location,
-                    $decoder,
-                    $program,
-                    $timeRange,
-                    $dateFrom,
-                    $dateTo,
-                    $logType
-                )
+                $payload
             );
 
             if (!$response->successful()) {
@@ -275,10 +298,10 @@ class WazuhIndexerService
                 'total_relation' => $totalRelation,
                 'page' => $page,
                 'size' => $size,
-                'total_pages' => ceil($total / $size),
+                'total_pages' => (int) ceil(max($total, 1) / $size),
                 'insights' => $this->buildLogInsights($aggs),
+                'log_scope' => $logScope,
             ];
-
         } catch (\Exception $e) {
             return [
                 'success' => false,
@@ -312,6 +335,23 @@ class WazuhIndexerService
             'medium' => data_get($summaryBuckets, 'medium.doc_count', 0),
             'low' => data_get($summaryBuckets, 'low.doc_count', 0),
         ];
+    }
+
+    private function filterSocAlertsBySeverity($alerts, string $severity)
+    {
+        return $alerts
+            ->filter(function ($alert) use ($severity) {
+                $level = (int) data_get($alert, 'level', 0);
+
+                return match ($severity) {
+                    'critical' => $level >= 14 && $level <= 15,
+                    'high' => $level >= 10 && $level <= 13,
+                    'medium' => $level >= 5 && $level < 10,
+                    'low' => $level < 5,
+                    default => true,
+                };
+            })
+            ->values();
     }
 
     private function filterSocAlerts($socAlerts, ?string $ruleId, ?string $mitre, ?string $group)

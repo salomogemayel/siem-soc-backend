@@ -4,6 +4,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SocNotificationController;
 use App\Http\Controllers\UnusualIpAlertController;
+use App\Http\Controllers\UserController;
 use App\Http\Controllers\WazuhController;
 use App\Http\Controllers\WazuhRuleController;
 use Illuminate\Http\Request;
@@ -21,6 +22,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/profile', [ProfileController::class, 'show']);
     Route::put('/profile', [ProfileController::class, 'update']);
     Route::put('/profile/password', [ProfileController::class, 'changePassword']);
+
+    Route::prefix('admin')->group(function () {
+        Route::get('/users', [UserController::class, 'index']); // Tambahkan baris ini
+        Route::post('/users', [UserController::class, 'store']);
+    });
 
     Route::prefix('wazuh')->group(function () {
         Route::get('/logs', [WazuhController::class, 'logs']);

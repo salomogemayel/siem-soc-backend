@@ -15,7 +15,8 @@ class WazuhLogQueryBuilder
         string $timeRange = '24h',
         string $dateFrom = '',
         string $dateTo = '',
-        string $logType = ''
+        string $logType = '',
+        string $logScope = 'cis'
     ): array {
         return [
             'from' => ($page - 1) * $size,
@@ -38,7 +39,8 @@ class WazuhLogQueryBuilder
                         $timeRange,
                         $dateFrom,
                         $dateTo,
-                        $logType
+                        $logType,
+                        $logScope
                     ),
                 ],
             ],
@@ -56,11 +58,18 @@ class WazuhLogQueryBuilder
         string $timeRange,
         string $dateFrom,
         string $dateTo,
-        string $logType
+        string $logType,
+        string $logScope
     ): array {
         $must = [
             $this->buildTimeRangeFilter($timeRange, $dateFrom, $dateTo),
         ];
+
+        $scopeFilter = $this->buildLogScopeFilter($logScope);
+
+        if ($scopeFilter) {
+            $must[] = $scopeFilter;
+        }
 
         if ($search) {
             $must[] = [
@@ -141,6 +150,94 @@ class WazuhLogQueryBuilder
         }
 
         return $must;
+    }
+
+    private function buildLogScopeFilter(string $logScope): ?array
+    {
+        $cisConditions = [
+            [
+                'wildcard' => [
+                    'location' => [
+                        'value' => '*cis_access.log*',
+                        'case_insensitive' => true,
+                    ],
+                ],
+            ],
+            [
+                'wildcard' => [
+                    'location' => [
+                        'value' => '*cis_error.log*',
+                        'case_insensitive' => true,
+                    ],
+                ],
+            ],
+            [
+                'wildcard' => [
+                    'location' => [
+                        'value' => '*app.log*',
+                        'case_insensitive' => true,
+                    ],
+                ],
+            ],
+            [
+                'wildcard' => [
+                    'location' => [
+                        'value' => '*audit.log*',
+                        'case_insensitive' => true,
+                    ],
+                ],
+            ],
+            [
+                'wildcard' => [
+                    'location' => [
+                        'value' => '*mysql-general.log*',
+                        'case_insensitive' => true,
+                    ],
+                ],
+            ],
+            [
+                'wildcard' => [
+                    'location' => [
+                        'value' => '*mysql_general.log*',
+                        'case_insensitive' => true,
+                    ],
+                ],
+            ],
+            [
+                'match_phrase' => [
+                    'decoder.name' => 'yii2_app_log',
+                ],
+            ],
+            [
+                'match_phrase' => [
+                    'decoder.name' => 'yii2_audit_log',
+                ],
+            ],
+            [
+                'match_phrase' => [
+                    'decoder.name' => 'mysql_general_log',
+                ],
+            ],
+        ];
+
+        if ($logScope === 'cis') {
+            return [
+                'bool' => [
+                    'should' => $cisConditions,
+                    'minimum_should_match' => 1,
+                ],
+            ];
+        }
+
+        if ($logScope === 'other') {
+            return [
+                'bool' => [
+                    'must_not' => $cisConditions,
+                ],
+            ];
+        }
+
+        return null;
     }
 
     private function buildTimeRangeFilter(

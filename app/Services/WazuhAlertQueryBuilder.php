@@ -43,21 +43,10 @@ class WazuhAlertQueryBuilder
                 'severity_summary' => [
                     'filters' => [
                         'filters' => [
-                            'high' => [
-                                'range' => [
-                                    'rule.level' => ['gte' => 10],
-                                ],
-                            ],
-                            'medium' => [
-                                'range' => [
-                                    'rule.level' => ['gte' => 5, 'lt' => 10],
-                                ],
-                            ],
-                            'low' => [
-                                'range' => [
-                                    'rule.level' => ['lt' => 5],
-                                ],
-                            ],
+                            'critical' => ['range' => ['rule.level' => ['gte' => 14, 'lte' => 15]]],
+                            'high' => ['range' => ['rule.level' => ['gte' => 10, 'lte' => 13]]],
+                            'medium' => ['range' => ['rule.level' => ['gte' => 5, 'lt' => 10]]],
+                            'low' => ['range' => ['rule.level' => ['lt' => 5]]],
                         ],
                     ],
                 ],
@@ -65,7 +54,7 @@ class WazuhAlertQueryBuilder
                     'terms' => [
                         'field' => 'rule.mitre.tactic',
                         'size' => 10,
-                    ]
+                    ],
                 ],
             ],
         ];
@@ -123,18 +112,18 @@ class WazuhAlertQueryBuilder
             ];
         }
 
-        // PERBAIKAN: Tambahkan logika mapping untuk 12h
         $gte = match ($timeRange) {
             'today' => 'now/d',
-            '48h' => 'now-48h',
-            '7d'  => 'now-7d',
-            '30d' => 'now-30d',
             '15m' => 'now-15m',
             '30m' => 'now-30m',
-            '1h'  => 'now-1h',
-            '6h'  => 'now-6h',
-            '12h' => 'now-12h', // <--- Tambahkan baris ini
-            default => 'now-24h', // Nilai default jika tidak ada yang cocok
+            '1h' => 'now-1h',
+            '6h' => 'now-6h',
+            '12h' => 'now-12h',
+            '24h' => 'now-24h',
+            '48h' => 'now-48h',
+            '7d' => 'now-7d',
+            '30d' => 'now-30d',
+            default => 'now-24h',
         };
 
         return [
@@ -149,8 +138,12 @@ class WazuhAlertQueryBuilder
 
     private function buildLevelFilter(?string $level, ?int $levelGte = null, ?string $severity = null): ?array
     {
+        if ($severity === 'critical') {
+            return ['range' => ['rule.level' => ['gte' => 14, 'lte' => 15]]];
+        }
+
         if ($severity === 'high') {
-            return ['range' => ['rule.level' => ['gte' => 10]]];
+            return ['range' => ['rule.level' => ['gte' => 10, 'lte' => 13]]];
         }
 
         if ($severity === 'medium') {
@@ -165,7 +158,7 @@ class WazuhAlertQueryBuilder
             return ['range' => ['rule.level' => ['gte' => $levelGte]]];
         }
 
-        if ($level !== null && is_numeric($level)) {
+        if ($level !== null && $level !== '' && is_numeric($level)) {
             return ['term' => ['rule.level' => (int) $level]];
         }
 
@@ -203,63 +196,26 @@ class WazuhAlertQueryBuilder
                     'lenient' => true,
                 ],
             ],
-            [
-                'wildcard' => [
-                    'rule.description.keyword' => [
-                        'value' => '*' . $search . '*',
-                        'case_insensitive' => true,
-                    ],
-                ],
-            ],
-            [
-                'wildcard' => [
-                    'agent.name.keyword' => [
-                        'value' => '*' . $search . '*',
-                        'case_insensitive' => true,
-                    ],
-                ],
-            ],
-            [
-                'wildcard' => [
-                    'decoder.name.keyword' => [
-                        'value' => '*' . $search . '*',
-                        'case_insensitive' => true,
-                    ],
-                ],
-            ],
-            [
-                'wildcard' => [
-                    'manager.name.keyword' => [
-                        'value' => '*' . $search . '*',
-                        'case_insensitive' => true,
-                    ],
-                ],
-            ],
-            [
-                'wildcard' => [
-                    'location.keyword' => [
-                        'value' => '*' . $search . '*',
-                        'case_insensitive' => true,
-                    ],
-                ],
-            ],
-            [
-                'wildcard' => [
-                    'data.srcip.keyword' => [
-                        'value' => '*' . $search . '*',
-                        'case_insensitive' => true,
-                    ],
-                ],
-            ],
-            [
-                'wildcard' => [
-                    'data.url.keyword' => [
-                        'value' => '*' . $search . '*',
-                        'case_insensitive' => true,
-                    ],
-                ],
-            ],
         ];
+
+        foreach ([
+                     'rule.description.keyword',
+                     'agent.name.keyword',
+                     'decoder.name.keyword',
+                     'manager.name.keyword',
+                     'location.keyword',
+                     'data.srcip.keyword',
+                     'data.url.keyword',
+                 ] as $field) {
+            $should[] = [
+                'wildcard' => [
+                    $field => [
+                        'value' => '*' . $search . '*',
+                        'case_insensitive' => true,
+                    ],
+                ],
+            ];
+        }
 
         if (is_numeric($search)) {
             $should[] = ['term' => ['rule.id' => (string) $search]];
@@ -283,6 +239,7 @@ class WazuhAlertQueryBuilder
         $agent = trim($agent);
 
         $should = [
+            ['term' => ['agent.id' => (string) $agent]],
             ['match_phrase' => ['agent.name' => $agent]],
             [
                 'wildcard' => [
@@ -293,10 +250,6 @@ class WazuhAlertQueryBuilder
                 ],
             ],
         ];
-
-        if (is_numeric($agent)) {
-            $should[] = ['term' => ['agent.id' => (string) $agent]];
-        }
 
         return [
             'bool' => [

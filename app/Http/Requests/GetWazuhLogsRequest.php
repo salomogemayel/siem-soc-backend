@@ -18,6 +18,7 @@ class GetWazuhLogsRequest extends FormRequest
             'time_range' => $this->input('time_range', $this->input('timeRange', '24h')),
             'date_from' => $this->input('date_from', $this->input('dateFrom')),
             'date_to' => $this->input('date_to', $this->input('dateTo')),
+            'logScope' => $this->query('log_scope', 'cis'),
         ]);
     }
 
@@ -54,6 +55,7 @@ class GetWazuhLogsRequest extends FormRequest
             'dateFrom' => $validated['date_from'] ?? '',
             'dateTo' => $validated['date_to'] ?? '',
             'logType' => $this->query('log_type', ''),
+            'logScope' => $this->query('log_scope', 'cis'),
         ];
     }
 }

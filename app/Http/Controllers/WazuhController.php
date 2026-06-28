@@ -12,8 +12,8 @@ use Illuminate\Http\Request;
 
 class WazuhController extends Controller
 {
-    protected $wazuhApiService;
-    protected $wazuhIndexerService;
+    protected WazuhApiService $wazuhApiService;
+    protected WazuhIndexerService $wazuhIndexerService;
 
     public function __construct(
         WazuhApiService $wazuhApiService,
@@ -30,12 +30,7 @@ class WazuhController extends Controller
         $search = $request->query('search', '');
         $status = $request->query('status', '');
 
-        $agentsResponse = $this->wazuhApiService->getAgents(
-            $page,
-            $size,
-            $search,
-            $status
-        );
+        $agentsResponse = $this->wazuhApiService->getAgents($page, $size, $search, $status);
 
         if (!$agentsResponse['success']) {
             return response()->json($agentsResponse);
@@ -85,9 +80,10 @@ class WazuhController extends Controller
         $level = $request->query('level', '');
         $group = $request->query('group', '');
         $ruleType = $request->query('ruleType', 'custom');
-        $rules = $this->wazuhApiService->getRules($page, $size, $search, $level, $group, $ruleType);
 
-        return response()->json($rules);
+        return response()->json(
+            $this->wazuhApiService->getRules($page, $size, $search, $level, $group, $ruleType)
+        );
     }
 
     public function alerts(GetWazuhAlertsRequest $request)
@@ -109,7 +105,9 @@ class WazuhController extends Controller
             $filters['sortBy'],
             $filters['sortOrder'],
             $filters['includeSoc'],
-            $filters['alertView']
+            $filters['alertView'],
+            $filters['severity'],
+            $filters['levelGte']
         );
 
         if (!($result['success'] ?? false)) {
@@ -141,7 +139,7 @@ class WazuhController extends Controller
         if (!($manager['success'] ?? false)) {
             return response()->json([
                 'success' => false,
-                'error' => $manager['error'] ?? 'Failed to load manager information'
+                'error' => $manager['error'] ?? 'Failed to load manager information',
             ]);
         }
 
@@ -150,23 +148,19 @@ class WazuhController extends Controller
             'data' => [
                 'status' => $manager['data']['status'] ?? [],
                 'info' => $manager['data']['info'] ?? [],
-
                 'health' => [
                     'manager_api' => 'online',
                     'indexer' => $indexer['health']['indexer'] ?? 'error',
                     'alerts_pipeline' => $indexer['health']['alerts_pipeline'] ?? 'idle',
                     'logs_pipeline' => $indexer['health']['logs_pipeline'] ?? 'idle',
                 ],
-
                 'metrics' => array_merge(
                     $indexer['metrics'] ?? [],
                     $agents
                 ),
-
                 'latest' => $indexer['latest'] ?? [],
-
                 'indices' => $indexer['indices'] ?? [],
-            ]
+            ],
         ]);
     }
 
@@ -185,7 +179,8 @@ class WazuhController extends Controller
             $filters['timeRange'],
             $filters['dateFrom'],
             $filters['dateTo'],
-            $filters['logType']
+            $filters['logType'],
+            $filters['logScope'] ?? 'cis'
         );
 
         if (!($result['success'] ?? false)) {
@@ -199,8 +194,6 @@ class WazuhController extends Controller
 
     public function logFilters()
     {
-        return response()->json(
-            $this->wazuhIndexerService->getLogFilters()
-        );
+        return response()->json($this->wazuhIndexerService->getLogFilters());
     }
 }
