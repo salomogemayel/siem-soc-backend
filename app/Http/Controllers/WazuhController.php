@@ -84,14 +84,8 @@ class WazuhController extends Controller
         $search = $request->query('search', '');
         $level = $request->query('level', '');
         $group = $request->query('group', '');
-
-        $rules = $this->wazuhApiService->getRules(
-            $page,
-            $size,
-            $search,
-            $level,
-            $group
-        );
+        $ruleType = $request->query('ruleType', 'custom');
+        $rules = $this->wazuhApiService->getRules($page, $size, $search, $level, $group, $ruleType);
 
         return response()->json($rules);
     }

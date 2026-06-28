@@ -6,9 +6,6 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('processed_login_alerts', function (Blueprint $table) {
@@ -17,15 +14,12 @@ return new class extends Migration
             $table->string('wazuh_rule_id')->nullable();
             $table->string('cis_user_id');
             $table->string('ip_address', 45);
+            $table->string('device')->nullable();
             $table->timestamp('processed_at')->nullable();
             $table->timestamps();
-            $table->index(['cis_user_id', 'ip_address']);
+            $table->index(['cis_user_id', 'ip_address', 'device']);
         });
     }
-
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('processed_login_alerts');

@@ -80,6 +80,15 @@ class WazuhIndexerService
 
             $summary = $this->buildAlertSummaryFromAggregations($json, $rawTotal);
 
+            $aggs = $json['aggregations'] ?? [];
+            $topMitreBuckets = data_get($aggs, 'top_mitre_tactics.buckets', []);
+            $topMitreStats = collect($topMitreBuckets)->map(function ($bucket) {
+                return [
+                    'name' => $bucket['key'],
+                    'count' => $bucket['doc_count']
+                ];
+            })->toArray();
+
             $socAlerts = collect();
 
             if ($includeSoc) {
@@ -132,6 +141,9 @@ class WazuhIndexerService
                 'total' => $total,
                 'raw_total' => $includeSoc ? $rawTotal + $socAlerts->count() : $rawTotal,
                 'summary' => $summary,
+                'statistics' => [
+                    'top_mitre' => $topMitreStats
+                ],
                 'page' => $page,
                 'size' => $size,
                 'total_pages' => (int) ceil(max($total, 1) / $size),

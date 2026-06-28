@@ -12,6 +12,7 @@ class ProcessedLoginAlert extends Model
         'cis_user_id',
         'ip_address',
         'processed_at',
+        'device'
     ];
 
     protected $casts = [

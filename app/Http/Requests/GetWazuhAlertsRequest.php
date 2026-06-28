@@ -38,7 +38,7 @@ class GetWazuhAlertsRequest extends FormRequest
             'rule_id' => 'nullable|string|max:50',
             'mitre' => 'nullable|string|max:100',
             'group' => 'nullable|string|max:100',
-            'time_range' => 'nullable|in:15m,30m,1h,6h,24h,7d,30d,custom,today',
+            'time_range' => 'nullable|in:15m,30m,1h,6h,12h,24h,7d,30d,custom,today',
             'date_from' => 'nullable|date',
             'date_to' => 'nullable|date',
             'sort_by' => 'nullable|in:timestamp,level,rule_id,agent_name',

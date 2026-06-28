@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\SocNotification;
 use App\Models\UnusualIpAlert;
 use App\Services\WazuhIndexerService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 
 class SocNotificationController extends Controller
@@ -56,7 +57,9 @@ class SocNotificationController extends Controller
                     'rule_level' => $level,
                     'agent_id' => data_get($alert, 'agent_id'),
                     'agent_name' => data_get($alert, 'agent_name'),
-                    'alert_timestamp' => data_get($alert, 'timestamp', now()),
+                    'alert_timestamp' => Carbon::parse(data_get($alert, 'timestamp', now()))
+                        ->setTimezone('UTC')
+                        ->format('Y-m-d H:i:s.v'),
                     'metadata' => $alert,
                 ]
             );
@@ -74,19 +77,20 @@ class SocNotificationController extends Controller
                     'source_alert_id' => 'soc-unusual-ip-' . $alert->id,
                 ],
                 [
-                    'type' => 'unusual_ip',
-                    'title' => 'Unusual IP Login Detected',
-                    'message' => "CIS user {$alert->cis_user_id} logged in from new IP {$alert->ip_address}",
+                    'type' => 'unusual_access',
+                    'title' => "Unusual Login Detected for User {$alert->cis_user_id}",
+                    'message' => "<strong>IP:</strong> {$alert->ip_address}<br><strong>Device:</strong> {$alert->device}",
                     'severity' => 'high',
-                    'rule_id' => 'SOC-UNUSUAL-IP',
+                    'rule_id' => 'Unusual Access',
                     'rule_level' => 10,
                     'agent_id' => 'SOC',
-                    'agent_name' => 'SOC Analysis',
+                    'agent_name' => 'Analysis',
                     'alert_timestamp' => $alert->detected_at ?? now(),
                     'metadata' => [
                         'soc_alert_id' => $alert->id,
                         'cis_user_id' => $alert->cis_user_id,
                         'ip_address' => $alert->ip_address,
+                        'device' => $alert->device,
                         'wazuh_alert_id' => $alert->wazuh_alert_id,
                         'wazuh_rule_id' => $alert->wazuh_rule_id,
                         'reason' => $alert->reason,

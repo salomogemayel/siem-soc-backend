@@ -11,9 +11,13 @@ return new class extends Migration
         Schema::create('soc_notifications', function (Blueprint $table) {
             $table->id();
 
-            $table->string('source_alert_id')->unique();
-            $table->string('type')->default('critical_alert');
+            // 1. Add the user_id column
+            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
 
+            // 2. Remove the standalone ->unique() constraint from here
+            $table->string('source_alert_id');
+
+            $table->string('type')->default('critical_alert');
             $table->string('title');
             $table->text('message')->nullable();
 
@@ -32,6 +36,9 @@ return new class extends Migration
             $table->json('metadata')->nullable();
 
             $table->timestamps();
+
+            // 3. Add a composite unique key so each user only gets one copy of a specific alert
+            $table->unique(['user_id', 'source_alert_id']);
 
             $table->index(['is_read', 'created_at']);
             $table->index(['severity', 'created_at']);

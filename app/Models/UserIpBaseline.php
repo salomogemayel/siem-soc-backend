@@ -13,6 +13,7 @@ class UserIpBaseline extends Model
         'last_seen_at',
         'login_count',
         'is_trusted',
+        'device'
     ];
 
     protected $casts = [

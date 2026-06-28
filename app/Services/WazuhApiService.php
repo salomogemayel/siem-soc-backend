@@ -45,7 +45,7 @@ class WazuhApiService
             ->$method($this->apiUrl . $endpoint, $query);
     }
 
-    public function getRules($page = 1, $size = 20, $search = '', $level = '', $group = '')
+    public function getRules($page = 1, $size = 20, $search = '', $level = '', $group = '', $ruleType = 'custom')
     {
         try {
             $offset = ($page - 1) * $size;
@@ -56,37 +56,42 @@ class WazuhApiService
                 'sort' => '+id',
             ];
 
-            if ($search) {
+            if ($search !== '' && $search !== null) {
                 $query['search'] = $search;
             }
-
-            if ($level) {
+            if ($level !== '' && $level !== null) {
                 $query['level'] = (int)$level . '-16';
             }
-
-            if ($group) {
+            if ($group !== '' && $group !== null) {
                 $query['group'] = $group;
+            }
+
+            // --- LOGIKA TOGGLE CUSTOM VS DEFAULT ---
+            $qFilters = [];
+
+            if ($ruleType === 'custom') {
+                // Hanya ambil rules dari local_rules.xml
+                $qFilters[] = 'filename=local_rules.xml';
+            } elseif ($ruleType === 'default') {
+                // Ambil semua rules KECUALI local_rules.xml
+                $qFilters[] = 'filename!=local_rules.xml';
+            }
+
+            // Gabungkan filter q (Wazuh menggunakan titik koma ';' untuk operator AND)
+            if (!empty($qFilters)) {
+                $query['q'] = implode(';', $qFilters);
             }
 
             $response = $this->request('get', '/rules', $query);
 
             if (!$response->successful()) {
-                return [
-                    'success' => false,
-                    'error' => $response->body()
-                ];
+                return ['success' => false, 'error' => $response->body()];
             }
 
-            return [
-                'success' => true,
-                'data' => $response->json()['data']
-            ];
+            return ['success' => true, 'data' => $response->json()['data'] ?? []];
 
         } catch (\Exception $e) {
-            return [
-                'success' => false,
-                'error' => $e->getMessage()
-            ];
+            return ['success' => false, 'error' => $e->getMessage()];
         }
     }
 

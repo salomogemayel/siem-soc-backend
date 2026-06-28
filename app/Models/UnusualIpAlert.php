@@ -14,6 +14,7 @@ class UnusualIpAlert extends Model
         'detected_at',
         'reason',
         'status',
+        'device'
     ];
 
     protected $casts = [

@@ -61,6 +61,12 @@ class WazuhAlertQueryBuilder
                         ],
                     ],
                 ],
+                'top_mitre_tactics' => [
+                    'terms' => [
+                        'field' => 'rule.mitre.tactic',
+                        'size' => 10,
+                    ]
+                ],
             ],
         ];
     }
@@ -117,7 +123,7 @@ class WazuhAlertQueryBuilder
             ];
         }
 
-        // Memetakan timeframe dari frontend ke format matematika waktu Elasticsearch
+        // PERBAIKAN: Tambahkan logika mapping untuk 12h
         $gte = match ($timeRange) {
             'today' => 'now/d',
             '48h' => 'now-48h',
@@ -127,6 +133,7 @@ class WazuhAlertQueryBuilder
             '30m' => 'now-30m',
             '1h'  => 'now-1h',
             '6h'  => 'now-6h',
+            '12h' => 'now-12h', // <--- Tambahkan baris ini
             default => 'now-24h', // Nilai default jika tidak ada yang cocok
         };
 
